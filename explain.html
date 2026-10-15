@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>설명서</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📘</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<style>
+.doc h2{margin:44px 0 12px;padding-top:20px;border-top:1px solid var(--grid)}
+.doc h2:first-of-type{border-top:0;padding-top:0}
+.doc h3{margin:26px 0 6px}
+.doc ul{padding-left:1.2em} .doc li{margin-bottom:6px}
+.doc hr{display:none}
+.doc .eq{white-space:normal}
+.fig{margin:14px 0}.fig svg{width:100%;height:auto;display:block}
+.fig figcaption{font-size:14px;color:var(--muted)}
+.go{display:flex;gap:10px;flex-wrap:wrap;margin:10px 0 16px}
+.go a{display:inline-block;padding:8px 14px;border:1px solid var(--nn);border-radius:999px;color:var(--nn);text-decoration:none;font-weight:600;font-size:15px}
+.doc a{color:var(--nn)}
+.dtabs{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:6px 0 34px}
+.dtab{font:inherit;text-align:left;cursor:pointer;background:var(--panel);color:var(--ink);border:1px solid var(--rule);border-radius:8px;padding:14px 16px}
+.dtab b{display:block;font-size:17px;margin-bottom:2px}
+.dtab span{font-size:14px;color:var(--muted);line-height:1.5}
+.dtab[aria-selected="true"]{border:2px solid var(--nn);padding:13px 15px}
+.dtab[aria-selected="true"] b{color:var(--nn)}
+.dtab:focus-visible{outline:2px solid var(--nn);outline-offset:2px}
+@media (max-width:560px){.dtabs{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<nav class="bar"><div><a href="index.html">← 처음 화면</a><span class="others"><a href="ship.html">선박 총톤수 예측하기</a><a href="general.html">내 데이터로 예측하기</a><a href="code.html">코드 설명 보기</a></span></div></nav>
+<div class="wrap">
+<header class="hero">
+<h1 id="doc-title"></h1>
+<p class="lede" id="doc-lede"></p>
+</header>
+<div class="dtabs" role="tablist" aria-label="설명서 선택"><button class="dtab" role="tab" data-tab="ship"><b>선박 총톤수 예측 설명서</b><span>데이터 정리, 신경망 구조, 알고리즘, 결과</span></button><button class="dtab" role="tab" data-tab="general"><b>내 데이터로 예측하기 설명서</b><span>범용 프로그램의 동작 순서와 구조, 한계</span></button></div>
+<article class="doc" data-docpanel="ship">
+<h2>1. 과제 개요</h2>
+<p>3장에서 배운 선형회귀는 입력 변수에 계수를 곱해 더하는 식(y = ax + b)으로 데이터를 설명합니다. 그래서 데이터가 곡선 형태이거나(비선형성) 입력 변수가 여러 개 얽혀 있으면(다차원성) 정확도가 크게 떨어집니다.</p>
+<p>이 과제에서는 조선해양 분야의 공개 데이터인 <strong>울산항 입항 선박의 제원 정보</strong>를 이용해, 선박의 주요 치수(길이 L, 너비 B, 깊이 D)로 <strong>총톤수(GT)</strong> 를 예측하는 인공신경망을 만들고 선형회귀와 비교했습니다.</p>
+<h2>2. 데이터</h2>
+<div class="tablewrap"><table>
+<thead>
+<tr>
+<th>항목</th>
+<th>내용</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>자료명</td>
+<td>울산항만공사_선박제원정보 (2026.05.27 기준)</td>
+</tr>
+<tr>
+<td>출처</td>
+<td>공공데이터포털 (data.go.kr), 울산항만공사 선석운영지원시스템</td>
+</tr>
+<tr>
+<td>원본 규모</td>
+<td>90,604행, 9개 열 (기준일자, 총톤수, 순톤수, 선박총길이, 선박너비, 선박건조 재계측일자, 선박깊이, 선박길이, 사용여부)</td>
+</tr>
+<tr>
+<td>입력 X</td>
+<td>선박길이 L, 선박너비 B, 선박깊이 D (m)</td>
+</tr>
+<tr>
+<td>출력 Y</td>
+<td>총톤수 GT</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>이 데이터를 고른 이유</strong>
+총톤수는 선박 내부 공간의 크기를 나타내는 값이라 대략 L × B × D, 즉 부피에 비례합니다. 세 치수가 서로 <strong>곱해지는</strong> 관계이므로, 각 변수를 <strong>더하는</strong> 선형회귀로는 정확히 표현하기 어렵습니다. 입력이 3개라서 다차원성, 곱의 관계라서 비선형성을 동시에 보여줄 수 있고, 선박 초기 설계 단계에서 주요 치수만으로 톤수를 추정하는 실제 문제와도 연결됩니다.</p>
+<h2>3. 데이터 정리 (전처리)</h2>
+<p>공공데이터에는 입력 실수와 빈 값을 대신한 숫자가 섞여 있어, 학습 전에 다음 규칙으로 정리했습니다.</p>
+<div class="tablewrap"><table>
+<thead>
+<tr>
+<th>단계</th>
+<th>규칙</th>
+<th>남은 행 수</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>원본</td>
+<td>—</td>
+<td>90,604</td>
+</tr>
+<tr>
+<td>1</td>
+<td>사용여부가 Y인 선박만 사용</td>
+<td>86,473</td>
+</tr>
+<tr>
+<td>2</td>
+<td>길이·너비·깊이·총톤수 중 0인 값 제거</td>
+<td>86,452</td>
+</tr>
+<tr>
+<td>3</td>
+<td>999999, 999.9 같은 자리채움 값 제거</td>
+<td>83,637</td>
+</tr>
+<tr>
+<td>4</td>
+<td>배 모양으로 불가능한 치수 제거 (L/B 2.5~10, B/D 0.8~4, L 10~400 m 밖)</td>
+<td>77,668</td>
+</tr>
+<tr>
+<td>5</td>
+<td>총톤수 ÷ (L×B×D)가 0.15~0.8 밖인 기록 제거 (치수와 톤수가 맞지 않는 입력 오류)</td>
+<td>74,930</td>
+</tr>
+<tr>
+<td>6</td>
+<td>중복 기록 제거</td>
+<td><strong>54,368</strong></td>
+</tr>
+</tbody>
+</table></div>
+<p>예를 들어 길이 179.9 m인데 너비가 174 m로 기록된 선박은 4단계에서 걸러졌습니다.</p>
+<p>이후 모든 값을 0~1 범위로 정규화했습니다. 시그모이드 함수는 입력이 너무 크면 출력이 0이나 1에 붙어 기울기가 거의 0이 되고 학습이 멈추기 때문입니다.</p>
+<div class="eq">x′ = (x − 최솟값) / (최댓값 − 최솟값)</div>
+<p>정리된 데이터의 80%는 학습용, 20%는 테스트용으로 나눴습니다.</p>
+<h2>4. 인공신경망 구조</h2>
+<figure class="fig"><svg viewBox="0 0 640 300" role="img" aria-label="입력 3개, 은닉 6개, 출력 1개 신경망 구조도"><line x1="110" y1="60" x2="330" y2="24" stroke="var(--rule)"/><line x1="110" y1="60" x2="330" y2="69" stroke="var(--rule)"/><line x1="110" y1="60" x2="330" y2="114" stroke="var(--rule)"/><line x1="110" y1="60" x2="330" y2="160" stroke="var(--rule)"/><line x1="110" y1="60" x2="330" y2="205" stroke="var(--rule)"/><line x1="110" y1="60" x2="330" y2="250" stroke="var(--rule)"/><line x1="110" y1="137" x2="330" y2="24" stroke="var(--rule)"/><line x1="110" y1="137" x2="330" y2="69" stroke="var(--rule)"/><line x1="110" y1="137" x2="330" y2="114" stroke="var(--rule)"/><line x1="110" y1="137" x2="330" y2="160" stroke="var(--rule)"/><line x1="110" y1="137" x2="330" y2="205" stroke="var(--rule)"/><line x1="110" y1="137" x2="330" y2="250" stroke="var(--rule)"/><line x1="110" y1="214" x2="330" y2="24" stroke="var(--rule)"/><line x1="110" y1="214" x2="330" y2="69" stroke="var(--rule)"/><line x1="110" y1="214" x2="330" y2="114" stroke="var(--rule)"/><line x1="110" y1="214" x2="330" y2="160" stroke="var(--rule)"/><line x1="110" y1="214" x2="330" y2="205" stroke="var(--rule)"/><line x1="110" y1="214" x2="330" y2="250" stroke="var(--rule)"/><line x1="330" y1="24" x2="540" y2="137" stroke="var(--rule)"/><line x1="330" y1="69" x2="540" y2="137" stroke="var(--rule)"/><line x1="330" y1="114" x2="540" y2="137" stroke="var(--rule)"/><line x1="330" y1="160" x2="540" y2="137" stroke="var(--rule)"/><line x1="330" y1="205" x2="540" y2="137" stroke="var(--rule)"/><line x1="330" y1="250" x2="540" y2="137" stroke="var(--rule)"/><circle cx="110" cy="60" r="14" fill="var(--panel)" stroke="var(--ink)" stroke-width="2"/><text x="88" y="65" text-anchor="end" font-size="14" fill="var(--ink)">길이</text><circle cx="110" cy="137" r="14" fill="var(--panel)" stroke="var(--ink)" stroke-width="2"/><text x="88" y="142" text-anchor="end" font-size="14" fill="var(--ink)">너비</text><circle cx="110" cy="214" r="14" fill="var(--panel)" stroke="var(--ink)" stroke-width="2"/><text x="88" y="219" text-anchor="end" font-size="14" fill="var(--ink)">깊이</text><circle cx="330" cy="24" r="13" fill="var(--nn)"/><circle cx="330" cy="69" r="13" fill="var(--nn)"/><circle cx="330" cy="114" r="13" fill="var(--nn)"/><circle cx="330" cy="160" r="13" fill="var(--nn)"/><circle cx="330" cy="205" r="13" fill="var(--nn)"/><circle cx="330" cy="250" r="13" fill="var(--nn)"/><circle cx="540" cy="137" r="14" fill="var(--panel)" stroke="var(--ink)" stroke-width="2"/><text x="562" y="142" font-size="14" fill="var(--ink)">총톤수</text><text x="110" y="290" text-anchor="middle" font-size="13" fill="var(--muted)">입력층 (노드 3개)</text><text x="330" y="290" text-anchor="middle" font-size="13" fill="var(--muted)">은닉층 Dense(6, sigmoid)</text><text x="540" y="290" text-anchor="middle" font-size="13" fill="var(--muted)">출력층 Dense(1)</text></svg><figcaption>입력층 3개, 은닉층 6개, 출력층 1개 노드로 이루어진 신경망 (<a href="ship.html#step4">은닉 노드를 눌러 보기</a>)</figcaption></figure>
+<div class="tablewrap"><table>
+<thead>
+<tr>
+<th>층</th>
+<th>노드 수</th>
+<th>코드</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>입력층</td>
+<td>3 (L, B, D)</td>
+<td><code>keras.Input(shape=(3,))</code></td>
+</tr>
+<tr>
+<td>은닉층</td>
+<td>6</td>
+<td><code>keras.layers.Dense(6, activation="sigmoid")</code></td>
+</tr>
+<tr>
+<td>출력층</td>
+<td>1 (총톤수)</td>
+<td><code>keras.layers.Dense(1)</code></td>
+</tr>
+</tbody>
+</table></div>
+<p>그림의 동그라미 하나가 <strong>노드(node)</strong>, 세로 한 줄이 <strong>층(layer)</strong> 입니다. 앞 층의 모든 노드가 다음 층의 모든 노드와 연결된 층을 <strong>Dense(완전연결) 층</strong>이라고 하며, Keras에서는 <code>Dense</code>로 층을 쌓습니다.</p>
+<p>학습되는 값의 개수는 입력→은닉 가중치 3×6 = 18개, 은닉 바이어스 6개, 은닉→출력 가중치 6개, 출력 바이어스 1개로 <strong>총 31개</strong>입니다.</p>
+<h2>5. 알고리즘 설명</h2>
+<h3>5-1. 노드 하나의 계산</h3>
+<p>각 노드는 입력에 가중치를 곱해 모두 더하고 바이어스를 더한 뒤, 활성화 함수 φ를 통과시킵니다. 강의자료의 "인공신경망의 기본 틀"과 같습니다.</p>
+<div class="eq">z = w₁·L′ + w₂·B′ + w₃·D′ + b　→　출력 = σ(z)</div>
+<h3>5-2. 시그모이드 활성화 함수</h3>
+<div class="eq">σ(z) = 1 / (1 + e⁻ᶻ)　　σ′(z) = σ(z)(1 − σ(z))</div>
+<p>활성화 함수가 없으면 층을 아무리 쌓아도 전체가 하나의 선형식이 되어 선형회귀와 같아집니다. 시그모이드는 각 노드에서 S자 곡선을 만들고, 출력층이 이 곡선들을 가중치로 더하면서 L·B·D처럼 휘어진 관계를 표현할 수 있습니다. 또한 미분값을 자기 자신으로 쉽게 계산할 수 있어 학습에 유리합니다.</p>
+<h3>5-3. 오차 정의</h3>
+<p>3장 잔차분석의 잔차제곱합과 같은 생각으로, 평균제곱오차(MSE)를 줄이는 것이 목표입니다.</p>
+<div class="eq">E = (1/n) Σ (y − ŷ)²</div>
+<h3>5-4. 경사하강법</h3>
+<p>선형회귀는 a, b를 공식으로 한 번에 구할 수 있었지만, 신경망은 가중치가 31개이고 식이 복잡해 공식으로 풀 수 없습니다. 대신 오차를 각 가중치로 미분한 기울기를 보고, 오차가 줄어드는 방향으로 조금씩 이동하는 과정을 반복합니다.</p>
+<div class="eq">w ← w − η · ∂E/∂w　(η: 학습률)</div>
+<p>강의의 km→mile 예시에서 0.5 → 0.6 → 0.7 → 0.61로 값을 고쳐 가며 오차를 줄인 것과 같은 원리입니다. 학습률이 너무 크면 최솟값을 지나쳐 반대쪽으로 넘어가고, 너무 작으면 학습이 느려집니다.</p>
+<h3>5-5. 오차 역전파</h3>
+<p>출력층에서 계산한 오차를 합성함수의 미분법(연쇄법칙)으로 은닉층까지 거꾸로 전달해 모든 가중치의 기울기를 구합니다.</p>
+<div class="eq">∂E/∂wⱼₖ = −(2/n) Σ (y − ŷ) · vⱼ · σ(zⱼ)(1 − σ(zⱼ)) · xₖ</div>
+<p>vⱼ는 은닉 노드 j에서 출력으로 가는 가중치입니다. 실제 코드는 경사하강법을 개선한 <strong>Adam</strong> 방식을 사용했는데, 원리는 같고 가중치마다 이동 폭을 자동으로 조절해 더 빨리 수렴합니다.</p>
+<h3>5-6. 강의 개념과 코드 대응</h3>
+<div class="tablewrap"><table>
+<thead>
+<tr>
+<th>강의 개념</th>
+<th>코드</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>층(layer)</td>
+<td><code>keras.layers.Dense(...)</code></td>
+</tr>
+<tr>
+<td>노드(o) 개수</td>
+<td><code>Dense(HIDDEN_NODES, ...)</code>의 숫자</td>
+</tr>
+<tr>
+<td>활성화 함수 φ</td>
+<td><code>activation="sigmoid"</code></td>
+</tr>
+<tr>
+<td>잔차제곱 최소화</td>
+<td><code>loss="mse"</code></td>
+</tr>
+<tr>
+<td>경사하강법</td>
+<td><code>optimizer=Adam(LEARNING_RATE)</code></td>
+</tr>
+<tr>
+<td>반복 학습</td>
+<td><code>model.fit(..., epochs=EPOCHS)</code></td>
+</tr>
+<tr>
+<td>가중치 w, 바이어스 b</td>
+<td><code>layer.get_weights()</code></td>
+</tr>
+</tbody>
+</table></div>
+<h2>6. 결과</h2>
+<p class="go"><a href="ship.html#step5">학습 과정 직접 보기</a><a href="ship.html#step6">결과 비교 그래프 보기</a></p>
+
+<p>테스트 데이터 기준 비교 (웹페이지, 3,000척 표본):</p>
+<div class="tablewrap"><table>
+<thead>
+<tr>
+<th>지표</th>
+<th>인공신경망</th>
+<th>선형회귀</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>결정계수 R²</td>
+<td>0.972</td>
+<td>0.804</td>
+</tr>
+<tr>
+<td>평균 절대 오차</td>
+<td>약 3,200 톤</td>
+<td>약 12,000 톤</td>
+</tr>
+<tr>
+<td>실제값 ±20% 이내 비율</td>
+<td>약 61%</td>
+<td>약 19%</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>해석</strong>
+- 선형회귀는 "총톤수 = a·L + b·B + c·D + 상수" 형태라 부피처럼 곱해지는 관계를 따라가지 못합니다. 대형선은 실제보다 작게 예측하고, 소형선은 테스트 선박의 약 26%를 <strong>음수 톤수</strong>로 예측했습니다. 물리적으로 불가능한 값입니다.
+- 인공신경망은 시그모이드 노드 6개를 조합해 휘어진 관계를 스스로 만들어 내, 소형선부터 대형선까지 실제값에 가깝게 예측했습니다.
+- 은닉 노드를 1~2개로 줄이면 표현할 수 있는 곡선이 부족해 정확도가 떨어지고, 너무 많이 늘리면 학습 데이터에만 맞추는 과적합이 생길 수 있어 테스트 데이터로 확인해야 합니다.</p>
+<p><strong>직접 예측 예시</strong> (<a href="ship.html#step7">7단계에서 직접 해보기</a>)</p>
+<div class="tablewrap"><table>
+<thead>
+<tr>
+<th>치수 L·B·D (m)</th>
+<th>인공신경망</th>
+<th>선형회귀</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>30·7·3 (소형선)</td>
+<td>약 900 GT</td>
+<td>약 −12,000 GT</td>
+</tr>
+<tr>
+<td>330·60·30 (대형선)</td>
+<td>약 164,000 GT</td>
+<td>약 111,000 GT</td>
+</tr>
+</tbody>
+</table></div>
+<h2>7. 프로그램 구성</h2>
+<p><strong>선박 총톤수 예측하기 (심화)</strong>
+데이터 소개 → 데이터 정리 → 정규화 → 신경망 구조 → 학습 → 결과 비교 → 직접 예측의 7단계를 클릭하며 따라갈 수 있습니다. 구조도에서 은닉 노드를 누르면 그 노드의 가중치와 계산식이 나오고, 학습 단계에서는 오차가 줄어드는 과정이 실시간으로 보입니다.</p>
+<p><strong>내 데이터로 예측하기 (범용)</strong> (<a href="#" data-doctab="general">범용 프로그램 설명서 보기</a>)
+CSV나 엑셀 파일을 올리고 입력 X 열(여러 개 가능)과 예측할 Y 열을 고르면 같은 구조의 신경망이 바로 학습하고 선형회귀와 비교합니다. 공공데이터에 흔한 cp949 인코딩과 쉼표 숫자를 자동 처리하며, Colab 범용 코드도 설정 셀만 바꾸면 다른 데이터에 쓸 수 있습니다.</p>
+<h2>8. 결론</h2>
+<p>선박의 길이·너비·깊이와 총톤수처럼 변수들이 곱해지는 비선형 관계에서는 선형회귀의 한계가 뚜렷했고(R² 0.80, 음수 톤수 예측), 은닉층에 시그모이드를 둔 인공신경망이 이를 크게 개선했습니다(R² 0.97). 남은 오차를 더 줄이려면 선종(유조선, 컨테이너선 등)이나 건조연도 같은 정보를 입력 노드로 추가하는 방법을 생각해 볼 수 있습니다.</p>
+<h2>9. 참고</h2>
+<ul>
+<li>울산항만공사, 「울산항만공사_선박제원정보」, 공공데이터포털 (data.go.kr)</li>
+<li>데이터처리개론 강의자료 3장 선형회귀, 4장 인공신경망 기초</li>
+</ul>
+</article>
+<article class="doc" data-docpanel="general" hidden>
+<p class="go"><a href="general.html">범용 프로그램 직접 써 보기</a></p>
+
+<p>선박 데이터 하나만 다루면 프로그램이 그 데이터에만 묶이게 됩니다. 같은 신경망 알고리즘을 <strong>어떤 공개 데이터에도 적용할 수 있도록</strong> 범용 프로그램을 따로 만들었습니다. 웹페이지와 Colab 범용 코드 모두 같은 순서로 동작합니다.</p>
+<h2>1. 동작 순서</h2>
+<div class="tablewrap"><table>
+<thead>
+<tr>
+<th>단계</th>
+<th>하는 일</th>
+<th>처리 방법</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1. 파일 읽기</td>
+<td>CSV, 엑셀(xlsx) 파일을 불러옴</td>
+<td>먼저 UTF-8로 읽고, 한글이 깨지면 공공데이터에 흔한 cp949(EUC-KR)로 다시 읽음</td>
+</tr>
+<tr>
+<td>2. 숫자 열 찾기</td>
+<td>학습에 쓸 수 있는 열을 자동 선별</td>
+<td>값의 90% 이상이 숫자인 열만 표시, "1,234"처럼 쉼표 들어간 숫자도 숫자로 변환</td>
+</tr>
+<tr>
+<td>3. X, Y 선택</td>
+<td>사용자가 입력 열과 예측할 열을 고름</td>
+<td>입력 X는 여러 개 선택 가능, Y로 고른 열은 X에서 자동 제외</td>
+</tr>
+<tr>
+<td>4. 정리</td>
+<td>빈칸이나 문자가 섞인 행 제거</td>
+<td>선택한 열 중 하나라도 숫자가 아니면 그 행을 제외</td>
+</tr>
+<tr>
+<td>5. 정규화·분리</td>
+<td>열마다 0~1로 정규화, 80% 학습 / 20% 테스트</td>
+<td>선박 프로그램과 같은 Min-Max 정규화</td>
+</tr>
+<tr>
+<td>6. 신경망 구성</td>
+<td>입력 노드 수를 고른 X 개수에 맞춤</td>
+<td>입력층 노드 = X 개수, 은닉층 Dense(시그모이드), 출력층 Dense(1)</td>
+</tr>
+<tr>
+<td>7. 학습·비교</td>
+<td>신경망과 선형회귀를 같은 데이터로 학습</td>
+<td>신경망은 경사하강법(Adam), 선형회귀는 최소제곱법</td>
+</tr>
+<tr>
+<td>8. 결과 표시</td>
+<td>그래프와 테스트 R² 표시</td>
+<td>입력 1개면 데이터 위에 예측 곡선, 2개 이상이면 실제값 vs 예측값 그래프</td>
+</tr>
+<tr>
+<td>9. 직접 예측</td>
+<td>원하는 값을 넣어 예측</td>
+<td>X 개수만큼 입력 칸이 자동 생성, 학습 범위 밖의 값이면 경고</td>
+</tr>
+</tbody>
+</table></div>
+<h2>2. 입력 개수에 따라 바뀌는 신경망</h2>
+<p>선박 프로그램은 입력이 길이·너비·깊이 3개로 고정이지만, 범용 프로그램은 사용자가 고른 열 개수 m에 따라 입력층이 바뀝니다. 강의자료의 "인공신경망의 기본 틀"에서 입력 x₁ ~ xₘ이 m개인 경우를 그대로 구현한 것입니다.</p>
+<div class="eq">은닉 노드 j의 계산: zⱼ = wⱼ₁x₁ + wⱼ₂x₂ + … + wⱼₘxₘ + bⱼ　→　σ(zⱼ)</div>
+<p>학습되는 값의 개수도 m에 따라 달라집니다. 은닉 노드가 H개일 때 m×H + H + H + 1개이며, 웹페이지의 구조도와 개수 표시가 선택에 맞춰 자동으로 바뀝니다.</p>
+<figure class="fig"><svg viewBox="0 0 640 300" role="img" aria-label="입력 m개, 은닉 H개, 출력 1개 신경망 구조도"><line x1="110" y1="50" x2="330" y2="24" stroke="var(--rule)"/><line x1="110" y1="50" x2="330" y2="69" stroke="var(--rule)"/><line x1="110" y1="50" x2="330" y2="114" stroke="var(--rule)"/><line x1="110" y1="50" x2="330" y2="160" stroke="var(--rule)"/><line x1="110" y1="50" x2="330" y2="205" stroke="var(--rule)"/><line x1="110" y1="50" x2="330" y2="250" stroke="var(--rule)"/><line x1="110" y1="100" x2="330" y2="24" stroke="var(--rule)"/><line x1="110" y1="100" x2="330" y2="69" stroke="var(--rule)"/><line x1="110" y1="100" x2="330" y2="114" stroke="var(--rule)"/><line x1="110" y1="100" x2="330" y2="160" stroke="var(--rule)"/><line x1="110" y1="100" x2="330" y2="205" stroke="var(--rule)"/><line x1="110" y1="100" x2="330" y2="250" stroke="var(--rule)"/><line x1="110" y1="224" x2="330" y2="24" stroke="var(--rule)"/><line x1="110" y1="224" x2="330" y2="69" stroke="var(--rule)"/><line x1="110" y1="224" x2="330" y2="114" stroke="var(--rule)"/><line x1="110" y1="224" x2="330" y2="160" stroke="var(--rule)"/><line x1="110" y1="224" x2="330" y2="205" stroke="var(--rule)"/><line x1="110" y1="224" x2="330" y2="250" stroke="var(--rule)"/><line x1="330" y1="24" x2="540" y2="137" stroke="var(--rule)"/><line x1="330" y1="69" x2="540" y2="137" stroke="var(--rule)"/><line x1="330" y1="114" x2="540" y2="137" stroke="var(--rule)"/><line x1="330" y1="160" x2="540" y2="137" stroke="var(--rule)"/><line x1="330" y1="205" x2="540" y2="137" stroke="var(--rule)"/><line x1="330" y1="250" x2="540" y2="137" stroke="var(--rule)"/><circle cx="110" cy="50" r="14" fill="var(--panel)" stroke="var(--ink)" stroke-width="2"/><text x="88" y="55" text-anchor="end" font-size="15" fill="var(--ink)">x₁</text><circle cx="110" cy="100" r="14" fill="var(--panel)" stroke="var(--ink)" stroke-width="2"/><text x="88" y="105" text-anchor="end" font-size="15" fill="var(--ink)">x₂</text><text x="110" y="183" text-anchor="middle" font-size="22" fill="var(--muted)">⋮</text><circle cx="110" cy="224" r="14" fill="var(--panel)" stroke="var(--ink)" stroke-width="2"/><text x="88" y="229" text-anchor="end" font-size="15" fill="var(--ink)">xₘ</text><circle cx="330" cy="24" r="13" fill="var(--nn)"/><circle cx="330" cy="69" r="13" fill="var(--nn)"/><circle cx="330" cy="114" r="13" fill="var(--nn)"/><circle cx="330" cy="160" r="13" fill="var(--nn)"/><circle cx="330" cy="205" r="13" fill="var(--nn)"/><circle cx="330" cy="250" r="13" fill="var(--nn)"/><circle cx="540" cy="137" r="14" fill="var(--panel)" stroke="var(--ink)" stroke-width="2"/><text x="562" y="142" font-size="15" fill="var(--ink)">y</text><text x="110" y="290" text-anchor="middle" font-size="13" fill="var(--muted)">입력층 (고른 열 m개)</text><text x="330" y="290" text-anchor="middle" font-size="13" fill="var(--muted)">은닉층 Dense(H, sigmoid)</text><text x="540" y="290" text-anchor="middle" font-size="13" fill="var(--muted)">출력층 Dense(1)</text></svg><figcaption>고른 입력 열 개수 m만큼 입력 노드가 생깁니다.</figcaption></figure>
+<h2>3. 정확도 지표: 결정계수 R²</h2>
+<p>데이터마다 단위와 크기가 달라 오차(MSE) 값만으로는 잘 맞았는지 판단하기 어렵기 때문에, 범용 프로그램은 결정계수 R²로 비교합니다.</p>
+<div class="eq">R² = 1 − Σ(y − ŷ)² / Σ(y − ȳ)²</div>
+<p>1에 가까울수록 정확하고, 0이면 모든 값을 평균으로 예측하는 것과 같은 수준입니다. 학습에 쓰지 않은 테스트 데이터 20%로 계산합니다.</p>
+<h2>4. 실행 예시</h2>
+<p>정리된 울산항 선박 데이터(3,000척 표본)를 올리고 X = 선박길이·선박너비·선박깊이, Y = 총톤수로 실행한 결과, 테스트 R²는 인공신경망 약 0.97, 선형회귀 약 0.80으로 선박 전용 프로그램과 같은 경향이 나왔습니다. 이는 범용 프로그램이 전용 프로그램과 같은 알고리즘으로 올바르게 동작함을 보여 줍니다.</p>
+<h2>5. 한계</h2>
+<ul>
+<li>999999처럼 "값 없음"을 숫자로 채운 이상값은 자동으로 걸러내지 못하므로, 필요하면 파일을 미리 정리해야 합니다 (선박 데이터는 3장의 규칙으로 정리).</li>
+<li>웹페이지는 브라우저 속도를 위해 3,000행이 넘으면 무작위로 3,000행만 사용합니다. 전체 데이터는 Colab 범용 코드로 학습할 수 있습니다.</li>
+<li>문자로 된 열(예: 선종, 지역명)은 입력으로 쓸 수 없습니다.</li>
+</ul>
+<h2>6. Colab 범용 코드</h2>
+<p>2번 설정 셀의 <code>FILE_PATH</code>, <code>X_COLS</code>, <code>Y_COL</code>만 바꾸면 다른 데이터에 그대로 쓸 수 있습니다. 나머지 셀은 위 8-1의 순서(읽기 → 숫자 변환 → 정규화 → 신경망 → 비교 → 직접 예측)를 그대로 따릅니다.</p>
+</article>
+<footer>데이터처리개론 2026년 2학기 과제</footer>
+</div>
+<script>
+(function(){
+  const tabs = [...document.querySelectorAll('.dtab')], hero = document.getElementById('doc-title'), lede = document.getElementById('doc-lede');
+  const TXT = { ship: ['인공신경망을 이용한 선박 총톤수 예측 프로그램', '울산항 선박 제원 공공데이터로 만든 인공신경망 예측 프로그램의 데이터, 구조, 알고리즘과 결과를 설명합니다.'],
+                general: ['내 데이터로 예측하기 (범용 프로그램)', '같은 신경망 알고리즘을 어떤 공개 데이터에도 쓸 수 있게 만든 범용 프로그램의 동작 방식을 설명합니다.'] };
+  function showTab(name){
+    if (!(name in TXT)) name = 'ship';
+    tabs.forEach(t => { const on = t.dataset.tab === name; t.setAttribute('aria-selected', on); t.tabIndex = on ? 0 : -1; });
+    document.querySelectorAll('[data-docpanel]').forEach(p => p.hidden = p.dataset.docpanel !== name);
+    hero.textContent = TXT[name][0]; lede.textContent = TXT[name][1];
+  }
+  tabs.forEach((t,i) => { t.onclick = () => showTab(t.dataset.tab);
+    t.onkeydown = e => { if (e.key === 'ArrowRight' || e.key === 'ArrowLeft'){ const n = tabs[(i+1) % 2]; n.focus(); n.click(); } }; });
+  document.querySelectorAll('[data-doctab]').forEach(a => a.addEventListener('click', e => { e.preventDefault(); showTab(a.dataset.doctab); window.scrollTo({top:0}); document.querySelector('.dtabs').scrollIntoView({behavior:'smooth'}); }));
+  showTab(location.hash === '#general' ? 'general' : 'ship');   // explain.html#general 로 들어오면 범용 설명서
+})();
+</script>
+</body>
+</html>

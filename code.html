@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>코드 설명</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💻</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<style>
+.dtabs{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:6px 0 26px}
+.dtab{font:inherit;text-align:left;cursor:pointer;background:var(--panel);color:var(--ink);border:1px solid var(--rule);border-radius:8px;padding:14px 16px}
+.dtab b{display:block;font-size:17px;margin-bottom:2px}
+.dtab span{font-size:13px;color:var(--muted);font-family:var(--mono)}
+.dtab[aria-selected="true"]{border:2px solid var(--nn);padding:13px 15px}
+.dtab[aria-selected="true"] b{color:var(--nn)}
+.dtab:focus-visible{outline:2px solid var(--nn);outline-offset:2px}
+.intro{background:var(--panel);border-left:3px solid var(--nn);padding:12px 16px;margin:0 0 18px}
+.toc{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 10px;padding:0;list-style:none}
+.toc a{display:inline-block;font-size:14px;color:var(--ink);text-decoration:none;border:1px solid var(--rule);border-radius:999px;padding:4px 12px;background:var(--panel)}
+.toc a:hover{border-color:var(--nn);color:var(--nn)}
+.step{padding:34px 0 8px;border-top:1px solid var(--grid);scroll-margin-top:60px}
+.step:first-of-type{border-top:0}
+.step h2{font-size:22px;margin:0 0 12px}
+.step .cell{margin:0 0 14px}
+.exp ul,.exp ol{padding-left:1.3em} .exp li{margin-bottom:6px}
+.exp code{font-family:var(--mono);font-size:.88em;background:var(--panel);border:1px solid var(--grid);padding:1px 5px;border-radius:3px}
+@media (max-width:640px){.dtabs{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<nav class="bar"><div><a href="index.html">← 처음 화면</a><span class="others"><a href="ship.html">선박 총톤수 예측하기</a><a href="general.html">내 데이터로 예측하기</a><a href="explain.html">설명서 보기</a></span></div></nav>
+<div class="wrap">
+<header class="hero"><h1>코드 설명</h1>
+<p class="lede">과제에 쓴 코드를 한 단계씩 따라가며 각 줄이 무엇을 하는지 설명합니다. 위에서 코드를 고르고, 아래 단계 버튼으로 원하는 부분으로 바로 이동할 수 있습니다.</p></header>
+<div class="dtabs" role="tablist" aria-label="코드 선택"><button class="dtab" role="tab" data-tab="ship" aria-selected="true"><b>선박 총톤수 예측 코드</b><span>ship_tonnage_ann.py</span></button><button class="dtab" role="tab" data-tab="general" aria-selected="false"><b>범용 예측 코드</b><span>general_ann.py</span></button><button class="dtab" role="tab" data-tab="js" aria-selected="false"><b>웹페이지 계산 코드</b><span>ann.js</span></button></div>
+<div data-panel="ship">
+<p class="intro">울산항 원본 CSV를 정리하고 Keras 신경망으로 총톤수를 예측하는 Colab 코드입니다. 공공데이터포털에서 받은 원본 파일을 Colab 왼쪽 폴더에 올리고 위에서부터 실행합니다.</p>
+<ul class="toc"><li><a href="#ship-1">1. 라이브러리 불러오기</a></li><li><a href="#ship-2">2. 설정</a></li><li><a href="#ship-3">3. 원본 데이터 불러오기</a></li><li><a href="#ship-4">4. 데이터 정리 (이상치 제거)</a></li><li><a href="#ship-5">5. 전처리 (0~1 정규화 + 학습/테스트 분리)</a></li><li><a href="#ship-6">6. 인공신경망 만들기 (layer → Dense, o → node)</a></li><li><a href="#ship-7">7. 학습 + 오차 감소 그래프</a></li><li><a href="#ship-8">8. 선형회귀와 비교</a></li><li><a href="#ship-9">9. 학습된 가중치 확인</a></li><li><a href="#ship-10">10. 선박 치수를 넣어 총톤수 예측</a></li></ul>
+<section class="step" id="ship-1"><h2>1. 라이브러리 불러오기</h2>
+<figure class="cell"><figcaption><span>ship_tonnage_ann.py</span><button class="copy" type="button">복사</button></figcaption><pre><code>import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+from sklearn.preprocessing import MinMaxScaler
+from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LinearRegression
+from sklearn.metrics import r2_score, mean_absolute_error
+from tensorflow import keras</code></pre></figure>
+<div class="exp"><p>코드에서 쓸 도구들을 불러옵니다.</p>
+<div class="tablewrap"><table>
+<thead>
+<tr>
+<th>도구</th>
+<th>하는 일</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>numpy</code></td>
+<td>숫자 배열 계산</td>
+</tr>
+<tr>
+<td><code>pandas</code></td>
+<td>CSV 파일을 표(DataFrame)로 읽고 행·열을 걸러냄</td>
+</tr>
+<tr>
+<td><code>matplotlib.pyplot</code></td>
+<td>그래프 그리기</td>
+</tr>
+<tr>
+<td><code>MinMaxScaler</code></td>
+<td>값을 0~1 범위로 바꾸는 정규화</td>
+</tr>
+<tr>
+<td><code>train_test_split</code></td>
+<td>데이터를 학습용과 테스트용으로 나눔</td>
+</tr>
+<tr>
+<td><code>LinearRegression</code></td>
+<td>신경망과 비교할 선형회귀 (3장)</td>
+</tr>
+<tr>
+<td><code>r2_score</code>, <code>mean_absolute_error</code></td>
+<td>예측이 얼마나 정확한지 재는 지표</td>
+</tr>
+<tr>
+<td><code>keras</code></td>
+<td>인공신경망을 만드는 라이브러리 (TensorFlow 안에 포함)</td>
+</tr>
+</tbody>
+</table></div></div></section>
+<section class="step" id="ship-2"><h2>2. 설정</h2>
+<figure class="cell"><figcaption><span>ship_tonnage_ann.py</span><button class="copy" type="button">복사</button></figcaption><pre><code>FILE_PATH = &quot;/content/울산항만공사_선박제원정보_20260527.csv&quot;   # 공공데이터포털에서 받은 원본 파일
+X_COLS = [&quot;선박길이&quot;, &quot;선박너비&quot;, &quot;선박깊이&quot;]   # 입력 노드 3개 (L, B, D)
+Y_COL = &quot;총톤수&quot;                              # 출력 노드 1개 (GT)
+
+HIDDEN_NODES = 6          # 은닉층 노드(o) 개수
+EPOCHS = 60               # 전체 데이터를 몇 번 반복 학습할지
+BATCH_SIZE = 256          # 가중치를 한 번 고칠 때 사용하는 데이터 개수
+LEARNING_RATE = 0.01      # 경사하강법의 이동 폭</code></pre></figure>
+<div class="exp"><p>나중에 바꿀 수 있는 값을 맨 위에 모아 둔 셀입니다.</p>
+<ul>
+<li><code>X_COLS</code>에 열이 3개이므로 <strong>입력 노드가 3개</strong>, <code>Y_COL</code>이 1개이므로 <strong>출력 노드가 1개</strong>가 됩니다.</li>
+<li><code>HIDDEN_NODES = 6</code>: 은닉층 동그라미(노드) 개수입니다.</li>
+<li><code>EPOCHS = 60</code>: 학습 데이터 전체를 처음부터 끝까지 60번 반복해서 봅니다.</li>
+<li><code>BATCH_SIZE = 256</code>: 256척씩 묶어서 오차를 계산하고 가중치를 한 번 고칩니다. 학습 데이터가 약 43,500척이므로 1 epoch에 가중치를 약 170번 고칩니다.</li>
+<li><code>LEARNING_RATE = 0.01</code>: 경사하강법 식 w ← w − η·∂E/∂w 의 η입니다. 한 번에 가중치를 얼마나 크게 움직일지 정합니다.</li>
+</ul></div></section>
+<section class="step" id="ship-3"><h2>3. 원본 데이터 불러오기</h2>
+<figure class="cell"><figcaption><span>ship_tonnage_ann.py</span><button class="copy" type="button">복사</button></figcaption><pre><code>try:
+    raw = pd.read_csv(FILE_PATH, encoding=&quot;cp949&quot;)    # 공공데이터는 대부분 cp949(EUC-KR)
+except UnicodeDecodeError:
+    raw = pd.read_csv(FILE_PATH, encoding=&quot;utf-8-sig&quot;)
+print(&quot;원본 행 수:&quot;, len(raw))
+raw.head()</code></pre></figure>
+<div class="exp"><p>공공데이터포털 CSV는 대부분 한글 인코딩이 <strong>cp949(EUC-KR)</strong> 입니다. 그래서 cp949로 먼저 읽고, 한글이 깨져 오류(<code>UnicodeDecodeError</code>)가 나면 UTF-8로 다시 읽도록 <code>try / except</code>를 썼습니다.</p>
+<p><code>raw.head()</code>는 첫 5줄을 보여 줘서 열 이름과 값이 제대로 읽혔는지 확인하는 용도입니다. 원본은 90,604행입니다.</p></div></section>
+<section class="step" id="ship-4"><h2>4. 데이터 정리 (이상치 제거)</h2>
+<figure class="cell"><figcaption><span>ship_tonnage_ann.py</span><button class="copy" type="button">복사</button></figcaption><pre><code>df = raw[raw[&quot;사용여부&quot;] == &quot;Y&quot;]
+print(&quot;사용여부 Y:&quot;, len(df))
+
+df = df[X_COLS + [Y_COL]]
+df = df[(df &gt; 0).all(axis=1)]
+print(&quot;0 값 제거:&quot;, len(df))
+
+df = df[(df[&quot;총톤수&quot;] &lt; 999999) &amp; (df[&quot;선박길이&quot;] &lt; 999) &amp; (df[&quot;선박너비&quot;] &lt; 999) &amp; (df[&quot;선박깊이&quot;] &lt; 99.9)]
+print(&quot;자리채움 값(999999 등) 제거:&quot;, len(df))
+
+L, B, D = df[&quot;선박길이&quot;], df[&quot;선박너비&quot;], df[&quot;선박깊이&quot;]
+df = df[(L / B).between(2.5, 10) &amp; (B / D).between(0.8, 4) &amp; L.between(10, 400)]
+print(&quot;배 모양으로 불가능한 치수 제거:&quot;, len(df))
+
+C = df[&quot;총톤수&quot;] / (df[&quot;선박길이&quot;] * df[&quot;선박너비&quot;] * df[&quot;선박깊이&quot;])   # 부피 대비 톤수 비율
+df = df[C.between(0.15, 0.8)]
+print(&quot;톤수와 치수가 맞지 않는 기록 제거:&quot;, len(df))
+
+df = df.drop_duplicates()
+print(&quot;중복 제거 후 최종:&quot;, len(df))
+df.describe()</code></pre></figure>
+<div class="exp"><p>학습 전에 잘못 기록된 값을 걸러냅니다. 각 줄 아래 <code>print</code>로 남은 행 수를 확인합니다.</p>
+<ol>
+<li><code>raw["사용여부"] == "Y"</code>: 현재 쓰이는 선박 기록만 남깁니다. → 86,473행</li>
+<li><code>df[X_COLS + [Y_COL]]</code>: 필요한 4개 열만 남기고, <code>(df &gt; 0).all(axis=1)</code>로 한 칸이라도 0인 행을 지웁니다. → 86,452행</li>
+<li><code>&lt; 999999</code>, <code>&lt; 999</code> 등: 값을 모를 때 채워 넣은 999999, 999.9 같은 숫자를 지웁니다. → 83,637행</li>
+<li><code>(L / B).between(2.5, 10)</code> 등: 길이/너비, 너비/깊이 비율이 실제 배 모양에서 벗어난 행을 지웁니다. 예를 들어 길이 179.9 m인데 너비 174 m로 적힌 기록이 여기서 걸러집니다. → 77,668행</li>
+<li><code>C = 총톤수 / (L×B×D)</code>: 총톤수는 부피에 비례하므로 이 비율이 0.15~0.8을 벗어나면 치수나 톤수 중 하나가 잘못 적힌 것으로 보고 지웁니다. → 74,930행</li>
+<li><code>drop_duplicates()</code>: 같은 배가 여러 번 입항해서 똑같이 반복된 기록을 하나만 남깁니다. → <strong>54,368행</strong></li>
+</ol></div></section>
+<section class="step" id="ship-5"><h2>5. 전처리 (0~1 정규화 + 학습/테스트 분리)</h2>
+<figure class="cell"><figcaption><span>ship_tonnage_ann.py</span><button class="copy" type="button">복사</button></figcaption><pre><code>X = df[X_COLS].values
+Y = df[[Y_COL]].values
+
+x_scaler, y_scaler = MinMaxScaler(), MinMaxScaler()
+X_s = x_scaler.fit_transform(X)
+Y_s = y_scaler.fit_transform(Y)
+
+X_train, X_test, Y_train, Y_test = train_test_split(X_s, Y_s, test_size=0.2, random_state=42)
+print(&quot;학습용:&quot;, len(X_train), &quot; 테스트용:&quot;, len(X_test))</code></pre></figure>
+<div class="exp"><ul>
+<li><code>.values</code>: 표(DataFrame)를 계산용 숫자 배열로 바꿉니다. <code>Y</code>는 <code>[[Y_COL]]</code>처럼 대괄호를 두 번 써서 <strong>세로 한 줄짜리 2차원 배열</strong>로 만듭니다. <code>MinMaxScaler</code>가 2차원만 받기 때문입니다.</li>
+<li><code>fit_transform</code>: 각 열의 최솟값·최댓값을 기억하고(fit), x′ = (x − 최솟값) / (최댓값 − 최솟값) 으로 바꿉니다(transform). 입력과 출력에 스케일러를 따로 써야 나중에 <code>y_scaler.inverse_transform</code>으로 예측값을 원래 톤 단위로 되돌릴 수 있습니다.</li>
+<li>정규화하는 이유: 시그모이드는 입력이 크면 출력이 0이나 1에 붙어 기울기가 거의 0이 되고 학습이 멈춥니다.</li>
+<li><code>train_test_split(..., test_size=0.2, random_state=42)</code>: 80%는 학습용, 20%는 학습에 쓰지 않고 정확도 확인에만 씁니다. <code>random_state=42</code>는 실행할 때마다 똑같이 나누도록 고정하는 값입니다.</li>
+</ul></div></section>
+<section class="step" id="ship-6"><h2>6. 인공신경망 만들기 (layer → Dense, o → node)</h2>
+<figure class="cell"><figcaption><span>ship_tonnage_ann.py</span><button class="copy" type="button">복사</button></figcaption><pre><code>model = keras.Sequential([
+    keras.Input(shape=(3,)),                                  # 입력층: 길이, 너비, 깊이
+    keras.layers.Dense(HIDDEN_NODES, activation=&quot;sigmoid&quot;),   # 은닉층: Σ(입력×w)+b → 시그모이드
+    keras.layers.Dense(1)                                     # 출력층: 총톤수
+])
+model.compile(optimizer=keras.optimizers.Adam(LEARNING_RATE), loss=&quot;mse&quot;)
+model.summary()</code></pre></figure>
+<div class="exp"><p><code>keras.Sequential([...])</code>은 괄호 안의 층을 <strong>위에서부터 순서대로</strong> 쌓습니다.</p>
+<div class="tablewrap"><table>
+<thead>
+<tr>
+<th>코드</th>
+<th>강의 그림에서</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>keras.Input(shape=(3,))</code></td>
+<td>입력층, 노드 3개 (길이, 너비, 깊이)</td>
+</tr>
+<tr>
+<td><code>Dense(6, activation="sigmoid")</code></td>
+<td>은닉층, 노드 6개. 각 노드가 z = w₁L′ + w₂B′ + w₃D′ + b 를 계산하고 σ(z)를 내보냄</td>
+</tr>
+<tr>
+<td><code>Dense(1)</code></td>
+<td>출력층, 노드 1개. 활성화 함수가 없어서 Σ v·σ(z) + c 값을 그대로 총톤수로 내보냄</td>
+</tr>
+</tbody>
+</table></div>
+<p>출력층에 시그모이드를 쓰지 않은 이유는 0~1 사이 확률이 아니라 <strong>연속된 숫자(톤수)</strong> 를 예측하는 회귀 문제이기 때문입니다.</p>
+<p><code>model.compile</code>은 학습 방법을 정합니다. <code>loss="mse"</code>는 오차를 평균제곱오차 E = (1/n)Σ(y − ŷ)²로 계산하라는 뜻이고, <code>Adam</code>은 경사하강법을 개선한 방법으로 가중치마다 이동 폭을 자동 조절합니다.</p>
+<p><code>model.summary()</code>를 실행하면 학습되는 값의 개수가 나옵니다. 은닉층 3×6 + 6 = <strong>24개</strong>, 출력층 6 + 1 = <strong>7개</strong>, 합계 <strong>31개</strong>입니다.</p></div></section>
+<section class="step" id="ship-7"><h2>7. 학습 + 오차 감소 그래프</h2>
+<figure class="cell"><figcaption><span>ship_tonnage_ann.py</span><button class="copy" type="button">복사</button></figcaption><pre><code>history = model.fit(X_train, Y_train, epochs=EPOCHS, batch_size=BATCH_SIZE,
+                    validation_data=(X_test, Y_test), verbose=0)
+
+plt.plot(history.history[&quot;loss&quot;], label=&quot;train loss&quot;)
+plt.plot(history.history[&quot;val_loss&quot;], label=&quot;test loss&quot;)
+plt.yscale(&quot;log&quot;); plt.xlabel(&quot;epoch&quot;); plt.ylabel(&quot;MSE (scaled)&quot;); plt.legend()
+plt.title(&quot;Loss during training&quot;); plt.show()</code></pre></figure>
+<div class="exp"><p><code>model.fit</code>이 실제 학습입니다. 순전파로 예측 → 오차 계산 → 역전파로 기울기 계산 → Adam으로 가중치 수정을 <code>EPOCHS</code>번 반복합니다.</p>
+<ul>
+<li><code>validation_data=(X_test, Y_test)</code>: 매 epoch이 끝날 때마다 테스트 데이터의 오차도 기록합니다. 테스트 데이터는 가중치 수정에는 쓰이지 않습니다.</li>
+<li><code>verbose=0</code>: 학습 중 출력을 끕니다.</li>
+<li><code>history.history["loss"]</code>, <code>["val_loss"]</code>: epoch별 학습 오차와 테스트 오차 목록입니다.</li>
+</ul>
+<p>그래프는 오차가 수백 배 줄어들어서 <code>yscale("log")</code>로 세로축을 로그 눈금으로 그렸습니다. 두 선이 함께 내려가면 잘 학습된 것이고, 학습 오차만 내려가고 테스트 오차가 올라가면 학습 데이터만 외운 <strong>과적합</strong>입니다.</p></div></section>
+<section class="step" id="ship-8"><h2>8. 선형회귀와 비교</h2>
+<figure class="cell"><figcaption><span>ship_tonnage_ann.py</span><button class="copy" type="button">복사</button></figcaption><pre><code>y_true = y_scaler.inverse_transform(Y_test)
+pred_nn = y_scaler.inverse_transform(model.predict(X_test, verbose=0))
+lr = LinearRegression().fit(X_train, Y_train)
+pred_lr = y_scaler.inverse_transform(lr.predict(X_test))
+
+for name, p in [(&quot;인공신경망&quot;, pred_nn), (&quot;선형회귀&quot;, pred_lr)]:
+    print(f&quot;{name}: R² = {r2_score(y_true, p):.3f}, 평균절대오차 = {mean_absolute_error(y_true, p):,.0f} 톤, &quot;
+          f&quot;음수 예측 비율 = {(p &lt; 0).mean() * 100:.1f}%&quot;)
+
+plt.figure(figsize=(6, 6))
+plt.scatter(y_true, pred_lr, s=4, alpha=0.4, label=&quot;Linear regression&quot;)
+plt.scatter(y_true, pred_nn, s=4, alpha=0.4, label=&quot;Neural network&quot;)
+lim = [0, y_true.max()]
+plt.plot(lim, lim, &quot;k--&quot;, label=&quot;perfect&quot;)
+plt.xlabel(&quot;actual GT&quot;); plt.ylabel(&quot;predicted GT&quot;); plt.legend(); plt.title(&quot;Actual vs Predicted (test)&quot;)
+plt.show()</code></pre></figure>
+<div class="exp"><ul>
+<li><code>inverse_transform</code>: 0~1로 바꿨던 값을 다시 원래 <strong>톤 단위</strong>로 되돌립니다. 실제값과 두 모델의 예측값 모두 되돌린 뒤 비교합니다.</li>
+<li><code>LinearRegression().fit(X_train, Y_train)</code>: 같은 학습 데이터로 3장의 선형회귀(총톤수 = a·L + b·B + c·D + 상수)를 만듭니다.</li>
+</ul>
+<p>출력되는 지표 세 가지:</p>
+<div class="tablewrap"><table>
+<thead>
+<tr>
+<th>지표</th>
+<th>뜻</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>R²</td>
+<td>1에 가까울수록 정확. 0이면 평균값으로 찍는 수준</td>
+</tr>
+<tr>
+<td>평균절대오차</td>
+<td>예측이 실제와 평균 몇 톤 차이 나는지</td>
+</tr>
+<tr>
+<td>음수 예측 비율</td>
+<td>톤수를 0보다 작게 예측한 비율 (물리적으로 불가능한 값)</td>
+</tr>
+</tbody>
+</table></div>
+<p>산점도에서 가로축은 실제값, 세로축은 예측값이고, 점선 y = x에 점이 가까울수록 정확합니다.</p></div></section>
+<section class="step" id="ship-9"><h2>9. 학습된 가중치 확인</h2>
+<figure class="cell"><figcaption><span>ship_tonnage_ann.py</span><button class="copy" type="button">복사</button></figcaption><pre><code>for i, layer in enumerate(model.layers):
+    w, b = layer.get_weights()
+    print(f&quot;[층 {i+1}] 가중치 행렬 {w.shape} → {w.size}개, 바이어스 {b.size}개&quot;)
+print(&quot;은닉층 가중치 (행: 길이/너비/깊이, 열: 은닉 노드)&quot;)
+print(np.round(model.layers[0].get_weights()[0], 2))</code></pre></figure>
+<div class="exp"><p><code>model.layers</code>는 Dense 층 2개의 목록이고, <code>layer.get_weights()</code>는 그 층의 [가중치 행렬 W, 바이어스 b]를 돌려줍니다.</p>
+<ul>
+<li>은닉층 W의 모양은 <strong>(3, 6)</strong>: 행 3개가 입력(길이·너비·깊이), 열 6개가 은닉 노드입니다. 즉 W[0][2]는 "길이 → 은닉 노드 3"으로 가는 화살표의 가중치입니다.</li>
+<li>출력층 W의 모양은 <strong>(6, 1)</strong>: 은닉 노드 6개 → 출력 노드 1개입니다.</li>
+</ul>
+<p>강의자료에서 화살표마다 w를 세었던 것(w(9), w(3))을 실제 학습된 숫자로 확인하는 셀입니다.</p></div></section>
+<section class="step" id="ship-10"><h2>10. 선박 치수를 넣어 총톤수 예측</h2>
+<figure class="cell"><figcaption><span>ship_tonnage_ann.py</span><button class="copy" type="button">복사</button></figcaption><pre><code>L_in = float(input(&quot;선박길이 L (m): &quot;))
+B_in = float(input(&quot;선박너비 B (m): &quot;))
+D_in = float(input(&quot;선박깊이 D (m): &quot;))
+
+x_new = x_scaler.transform([[L_in, B_in, D_in]])
+gt_nn = y_scaler.inverse_transform(model.predict(x_new, verbose=0))[0, 0]
+gt_lr = y_scaler.inverse_transform(lr.predict(x_new))[0, 0]
+print(f&quot;인공신경망 예측 총톤수: {gt_nn:,.0f} GT&quot;)
+print(f&quot;선형회귀   예측 총톤수: {gt_lr:,.0f} GT&quot;)</code></pre></figure>
+<div class="exp"><ol>
+<li><code>input()</code>으로 길이·너비·깊이를 입력받고 <code>float()</code>로 숫자로 바꿉니다.</li>
+<li><code>x_scaler.transform(...)</code>: 학습 때 기억해 둔 최솟값·최댓값으로 <strong>똑같이</strong> 정규화합니다. 여기서 <code>fit</code>을 새로 하면 기준이 달라져 엉뚱한 값이 나옵니다.</li>
+<li><code>model.predict</code> → <code>y_scaler.inverse_transform</code>: 신경망 출력(0~1)을 톤 단위로 되돌립니다.</li>
+<li><code>[0, 0]</code>: 결과가 1×1 배열이라 그 안의 숫자 하나를 꺼냅니다.</li>
+<li><code>:,.0f</code>: 천 단위 쉼표를 넣고 소수점 없이 출력합니다.</li>
+</ol></div></section>
+</div>
+<div data-panel="general" hidden>
+<p class="intro">2번 설정 셀만 바꾸면 어떤 CSV·엑셀 데이터든 같은 신경망으로 예측하는 Colab 코드입니다.</p>
+<ul class="toc"><li><a href="#general-1">1. 라이브러리 불러오기</a></li><li><a href="#general-2">2. 설정</a></li><li><a href="#general-3">3. 데이터 불러오기 (인코딩 자동 처리)</a></li><li><a href="#general-4">4. 전처리</a></li><li><a href="#general-5">5. 인공신경망 만들기 + 학습</a></li><li><a href="#general-6">6. 결과 비교</a></li><li><a href="#general-7">7. 원하는 값을 넣어 예측하기</a></li></ul>
+<section class="step" id="general-1"><h2>1. 라이브러리 불러오기</h2>
+<figure class="cell"><figcaption><span>general_ann.py</span><button class="copy" type="button">복사</button></figcaption><pre><code>import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+from sklearn.preprocessing import MinMaxScaler
+from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LinearRegression
+from sklearn.metrics import r2_score
+from tensorflow import keras</code></pre></figure>
+<div class="exp"><p>선박 코드와 같은 도구를 불러옵니다. 정확도 지표는 데이터마다 단위가 달라도 비교할 수 있는 <code>r2_score</code>만 씁니다.</p></div></section>
+<section class="step" id="general-2"><h2>2. 설정</h2>
+<figure class="cell"><figcaption><span>general_ann.py</span><button class="copy" type="button">복사</button></figcaption><pre><code>FILE_PATH = &quot;/content/울산항_선박제원_정제.csv&quot;   # csv, xlsx 모두 가능
+X_COLS = [&quot;선박길이&quot;, &quot;선박너비&quot;, &quot;선박깊이&quot;]      # 입력으로 쓸 열 이름들 (개수 = 입력 노드 개수)
+Y_COL = &quot;총톤수&quot;                                 # 예측할 열 이름 (출력 노드 1개)
+
+HIDDEN_NODES = 8          # 은닉층 노드(o) 개수
+EPOCHS = 100              # 반복 학습 횟수
+BATCH_SIZE = 64
+LEARNING_RATE = 0.01</code></pre></figure>
+<div class="exp"><p><strong>다른 데이터를 쓸 때는 이 셀의 세 줄만 바꾸면 됩니다.</strong></p>
+<ul>
+<li><code>FILE_PATH</code>: Colab에 올린 파일 경로 (CSV, 엑셀 모두 가능)</li>
+<li><code>X_COLS</code>: 입력으로 쓸 열 이름 목록. 몇 개를 넣든 그 개수만큼 입력 노드가 생깁니다.</li>
+<li><code>Y_COL</code>: 예측할 열 이름</li>
+</ul>
+<p>예를 들어 기온 데이터라면 <code>X_COLS = ["월"]</code>, <code>Y_COL = "평균기온"</code>처럼 바꿉니다.</p></div></section>
+<section class="step" id="general-3"><h2>3. 데이터 불러오기 (인코딩 자동 처리)</h2>
+<figure class="cell"><figcaption><span>general_ann.py</span><button class="copy" type="button">복사</button></figcaption><pre><code>def load_data(path):
+    if path.lower().endswith((&quot;.xlsx&quot;, &quot;.xls&quot;)):
+        return pd.read_excel(path)
+    for enc in [&quot;utf-8-sig&quot;, &quot;cp949&quot;]:          # 공공데이터는 cp949인 경우가 많음
+        try:
+            return pd.read_csv(path, encoding=enc)
+        except UnicodeDecodeError:
+            continue
+    raise ValueError(&quot;파일 인코딩을 읽을 수 없습니다.&quot;)
+
+data = load_data(FILE_PATH)
+for col in X_COLS + [Y_COL]:                      # &quot;1,234&quot; 같은 쉼표 숫자도 숫자로 변환
+    data[col] = pd.to_numeric(data[col].astype(str).str.replace(&quot;,&quot;, &quot;&quot;), errors=&quot;coerce&quot;)
+data = data[X_COLS + [Y_COL]].dropna()
+print(&quot;사용할 데이터 개수:&quot;, len(data))
+data.describe()</code></pre></figure>
+<div class="exp"><p><code>load_data</code> 함수가 파일 종류에 맞게 읽습니다.</p>
+<ul>
+<li>확장자가 <code>.xlsx</code>, <code>.xls</code>이면 <code>read_excel</code>로 읽습니다.</li>
+<li>CSV는 UTF-8로 먼저 읽고, 한글이 깨져 오류가 나면 <code>continue</code>로 넘어가 cp949로 다시 읽습니다.</li>
+</ul>
+<p>그다음 <code>for</code> 문이 선택한 열을 하나씩 숫자로 바꿉니다.</p>
+<ul>
+<li><code>.str.replace(",", "")</code>: "1,234"처럼 쉼표가 들어간 숫자에서 쉼표를 지웁니다.</li>
+<li><code>pd.to_numeric(..., errors="coerce")</code>: 숫자로 못 바꾸는 값(문자, 빈칸)은 오류 대신 빈 값(NaN)으로 만듭니다.</li>
+<li><code>.dropna()</code>: 빈 값이 하나라도 있는 행을 지웁니다.</li>
+</ul></div></section>
+<section class="step" id="general-4"><h2>4. 전처리</h2>
+<figure class="cell"><figcaption><span>general_ann.py</span><button class="copy" type="button">복사</button></figcaption><pre><code>X = data[X_COLS].values
+Y = data[[Y_COL]].values
+x_scaler, y_scaler = MinMaxScaler(), MinMaxScaler()
+X_s = x_scaler.fit_transform(X)
+Y_s = y_scaler.fit_transform(Y)
+X_train, X_test, Y_train, Y_test = train_test_split(X_s, Y_s, test_size=0.2, random_state=42)</code></pre></figure>
+<div class="exp"><p>선박 코드 5번과 같습니다. 입력·출력을 각각 0~1로 정규화하고 80%/20%로 나눕니다.</p></div></section>
+<section class="step" id="general-5"><h2>5. 인공신경망 만들기 + 학습</h2>
+<figure class="cell"><figcaption><span>general_ann.py</span><button class="copy" type="button">복사</button></figcaption><pre><code>model = keras.Sequential([
+    keras.Input(shape=(len(X_COLS),)),
+    keras.layers.Dense(HIDDEN_NODES, activation=&quot;sigmoid&quot;),
+    keras.layers.Dense(1)
+])
+model.compile(optimizer=keras.optimizers.Adam(LEARNING_RATE), loss=&quot;mse&quot;)
+history = model.fit(X_train, Y_train, epochs=EPOCHS, batch_size=BATCH_SIZE,
+                    validation_data=(X_test, Y_test), verbose=0)
+plt.plot(history.history[&quot;loss&quot;], label=&quot;train&quot;); plt.plot(history.history[&quot;val_loss&quot;], label=&quot;test&quot;)
+plt.yscale(&quot;log&quot;); plt.xlabel(&quot;epoch&quot;); plt.ylabel(&quot;MSE&quot;); plt.legend(); plt.show()</code></pre></figure>
+<div class="exp"><p>선박 코드와 다른 점은 <code>keras.Input(shape=(len(X_COLS),))</code> 한 줄입니다. <code>len(X_COLS)</code>가 고른 열의 개수라서, <strong>입력 노드 수가 데이터에 맞춰 자동으로 정해집니다.</strong> 열을 1개 고르면 입력 노드 1개, 5개 고르면 5개입니다.</p>
+<p>학습되는 값의 개수는 입력 m개, 은닉 H개일 때 m×H + H + H + 1개입니다. 모델을 만들고(<code>Sequential</code>), 학습 방법을 정하고(<code>compile</code>), 학습하고(<code>fit</code>), 오차 그래프까지 한 셀에서 합니다.</p></div></section>
+<section class="step" id="general-6"><h2>6. 결과 비교</h2>
+<figure class="cell"><figcaption><span>general_ann.py</span><button class="copy" type="button">복사</button></figcaption><pre><code>y_true = y_scaler.inverse_transform(Y_test)
+pred_nn = y_scaler.inverse_transform(model.predict(X_test, verbose=0))
+lr = LinearRegression().fit(X_train, Y_train)
+pred_lr = y_scaler.inverse_transform(lr.predict(X_test))
+print(f&quot;인공신경망 R² = {r2_score(y_true, pred_nn):.3f}&quot;)
+print(f&quot;선형회귀   R² = {r2_score(y_true, pred_lr):.3f}&quot;)
+
+if len(X_COLS) == 1:     # 입력 1개: 데이터 위에 예측선
+    order = np.argsort(X_s[:, 0]); xp = x_scaler.inverse_transform(X_s[order])
+    plt.scatter(X, Y, s=6, color=&quot;gray&quot;)
+    plt.plot(xp, y_scaler.inverse_transform(model.predict(X_s[order], verbose=0)), &quot;r&quot;, label=&quot;Neural network&quot;)
+    plt.plot(xp, y_scaler.inverse_transform(lr.predict(X_s[order])), &quot;b&quot;, label=&quot;Linear regression&quot;)
+else:                    # 입력 여러 개: 실제값 vs 예측값
+    plt.scatter(y_true, pred_lr, s=5, alpha=0.5, label=&quot;Linear regression&quot;)
+    plt.scatter(y_true, pred_nn, s=5, alpha=0.5, label=&quot;Neural network&quot;)
+    plt.plot([y_true.min(), y_true.max()], [y_true.min(), y_true.max()], &quot;k--&quot;)
+    plt.xlabel(&quot;actual&quot;); plt.ylabel(&quot;predicted&quot;)
+plt.legend(); plt.show()</code></pre></figure>
+<div class="exp"><p>R²로 신경망과 선형회귀를 비교한 뒤, 입력 개수에 따라 그래프를 다르게 그립니다.</p>
+<ul>
+<li><strong>입력이 1개</strong>일 때: 가로축 X, 세로축 Y인 산점도 위에 두 모델의 예측선을 그립니다. <code>np.argsort</code>로 X를 작은 값부터 정렬해야 선이 지그재그로 꼬이지 않고 왼쪽에서 오른쪽으로 이어집니다.</li>
+<li><strong>입력이 여러 개</strong>일 때: 축 하나에 X를 다 그릴 수 없으므로, 가로축 실제값·세로축 예측값 그래프를 그립니다. 점선에 가까울수록 정확합니다.</li>
+</ul></div></section>
+<section class="step" id="general-7"><h2>7. 원하는 값을 넣어 예측하기</h2>
+<figure class="cell"><figcaption><span>general_ann.py</span><button class="copy" type="button">복사</button></figcaption><pre><code>values = [float(input(f&quot;{col} 값을 입력하세요: &quot;)) for col in X_COLS]
+x_new = x_scaler.transform([values])
+print(f&quot;인공신경망 예측 {Y_COL}: {y_scaler.inverse_transform(model.predict(x_new, verbose=0))[0, 0]:,.2f}&quot;)
+print(f&quot;선형회귀   예측 {Y_COL}: {y_scaler.inverse_transform(lr.predict(x_new))[0, 0]:,.2f}&quot;)</code></pre></figure>
+<div class="exp"><p><code>[... for col in X_COLS]</code>가 고른 열 개수만큼 반복해서 값을 입력받습니다. 열이 3개면 3번, 1개면 1번 물어봅니다. 그 뒤는 선박 코드 10번과 같이 학습 때의 스케일러로 정규화하고, 예측하고, 원래 단위로 되돌립니다.</p></div></section>
+</div>
+<div data-panel="js" hidden>
+<p class="intro">이 사이트에서 학습 버튼을 누르면 실제로 돌아가는 자바스크립트 코드입니다. 브라우저에는 Keras가 없어서, Keras가 내부에서 하는 순전파·역전파·Adam 계산을 직접 구현했습니다.</p>
+<ul class="toc"><li><a href="#js-1">시그모이드 함수</a></li><li><a href="#js-2">가중치 초기화 (생성자)</a></li><li><a href="#js-3">순전파 (예측)</a></li><li><a href="#js-4">학습 1 epoch (역전파 + Adam)</a></li><li><a href="#js-5">선형회귀 (정규방정식)</a></li></ul>
+<section class="step" id="js-1"><h2>시그모이드 함수</h2>
+<figure class="cell"><figcaption><span>ann.js</span><button class="copy" type="button">복사</button></figcaption><pre><code>  // 활성화 함수 σ(z) = 1 / (1 + e^-z),  미분 σ&#x27;(z) = σ(z)(1 − σ(z))
+  const sigmoid = z =&gt; 1 / (1 + Math.exp(-z));</code></pre></figure>
+<div class="exp"><p>σ(z) = 1 / (1 + e⁻ᶻ) 를 그대로 옮긴 한 줄입니다. 파이썬 코드의 <code>activation="sigmoid"</code>가 내부에서 하는 계산과 같습니다.</p></div></section>
+<section class="step" id="js-2"><h2>가중치 초기화 (생성자)</h2>
+<figure class="cell"><figcaption><span>ann.js</span><button class="copy" type="button">복사</button></figcaption><pre><code>    constructor(d, H, o = {}) {
+      const { seed = 11, wScale = 3, bShift = 0.5, vScale = 0.3, c0 = 0.1 } = o;
+      const R = makeRandom(seed);
+      this.d = d; this.H = H;
+      this.W = [];   // 입력 → 은닉 가중치 (H × d)
+      this.b = [];   // 은닉 바이어스 (H)
+      this.v = [];   // 은닉 → 출력 가중치 (H)
+      for (let j = 0; j &lt; H; j++) {
+        const w = Array.from({ length: d }, () =&gt; R.gauss() * wScale);
+        this.W.push(w);
+        this.b.push(-w.reduce((a, x) =&gt; a + x * R.rand() * bShift, 0));  // 시그모이드가 데이터 범위 안에서 꺾이도록
+        this.v.push(R.gauss() * vScale);
+      }
+      this.c = c0;   // 출력 바이어스
+      const P = H * d + 2 * H + 1;              // 학습되는 값의 총 개수
+      this.m = new Float64Array(P); this.s = new Float64Array(P); this.t = 0;   // Adam 상태
+    }</code></pre></figure>
+<div class="exp"><p>신경망을 처음 만들 때 가중치를 무작위로 정합니다.</p>
+<ul>
+<li><code>this.W</code>: 입력 → 은닉 가중치. 은닉 노드 H개 각각이 입력 d개에 대한 가중치를 가집니다 (H × d개).</li>
+<li><code>this.b</code>: 은닉 노드마다 하나씩 있는 바이어스입니다. 시그모이드가 데이터 범위 안에서 꺾이도록 초기값을 맞춰 줍니다.</li>
+<li><code>this.v</code>, <code>this.c</code>: 은닉 → 출력 가중치 H개와 출력 바이어스 1개입니다.</li>
+<li><code>m</code>, <code>s</code>, <code>t</code>: Adam이 기억하는 값입니다 (아래 설명).</li>
+</ul>
+<p><code>seed</code>를 고정해서 페이지를 새로 열어도 같은 초기값으로 시작합니다.</p></div></section>
+<section class="step" id="js-3"><h2>순전파 (예측)</h2>
+<figure class="cell"><figcaption><span>ann.js</span><button class="copy" type="button">복사</button></figcaption><pre><code>    // 은닉 노드 j의 입력 합: z = Σ(w·x) + b
+    z(j, x) { let z = this.b[j]; const w = this.W[j]; for (let k = 0; k &lt; this.d; k++) z += w[k] * x[k]; return z; }
+
+    // 순전파: ŷ = Σ v_j·σ(z_j) + c
+    predict(x) { let o = this.c; for (let j = 0; j &lt; this.H; j++) o += this.v[j] * sigmoid(this.z(j, x)); return o; }</code></pre></figure>
+<div class="exp"><ul>
+<li><code>z(j, x)</code>: 은닉 노드 j의 입력 합 z = Σ(w·x) + b</li>
+<li><code>predict(x)</code>: 은닉 노드마다 σ(z)를 구해 출력 가중치 v를 곱해 더하고 c를 더합니다. ŷ = Σ vⱼ·σ(zⱼ) + c</li>
+</ul>
+<p>Keras의 <code>model.predict</code>가 하는 일과 같습니다.</p></div></section>
+<section class="step" id="js-4"><h2>학습 1 epoch (역전파 + Adam)</h2>
+<figure class="cell"><figcaption><span>ann.js</span><button class="copy" type="button">복사</button></figcaption><pre><code>    trainStep(X, Y, idx, lr) {
+      const { d, H, W, b, v } = this, n = idx.length;
+      const gW = W.map(() =&gt; new Float64Array(d)), gb = new Float64Array(H), gv = new Float64Array(H);
+      const a = new Float64Array(H); let gc = 0, loss = 0;
+      for (const i of idx) {
+        const x = X[i]; let o = this.c;
+        for (let j = 0; j &lt; H; j++) { a[j] = sigmoid(this.z(j, x)); o += v[j] * a[j]; }   // 순전파
+        const r = Y[i] - o; loss += r * r;
+        const e = -2 * r / n;                                // ∂E/∂ŷ
+        gc += e;
+        for (let j = 0; j &lt; H; j++) {                        // 역전파 (연쇄법칙)
+          gv[j] += e * a[j];                                 // ∂E/∂v_j
+          const dz = e * v[j] * a[j] * (1 - a[j]);           // ∂E/∂z_j = ∂E/∂ŷ · v_j · σ&#x27;(z_j)
+          gb[j] += dz;
+          for (let k = 0; k &lt; d; k++) gW[j][k] += dz * x[k]; // ∂E/∂w_jk
+        }
+      }
+      // Adam: 기울기의 이동평균(m)과 크기(s)로 가중치마다 이동 폭을 조절
+      this.t++; const b1 = 0.9, b2 = 0.999, m = this.m, s = this.s, t = this.t;
+      const upd = (q, g) =&gt; {
+        m[q] = b1 * m[q] + (1 - b1) * g; s[q] = b2 * s[q] + (1 - b2) * g * g;
+        return lr * (m[q] / (1 - b1 ** t)) / (Math.sqrt(s[q] / (1 - b2 ** t)) + 1e-8);
+      };
+      let q = 0;
+      for (let j = 0; j &lt; H; j++) for (let k = 0; k &lt; d; k++) W[j][k] -= upd(q++, gW[j][k]);
+      for (let j = 0; j &lt; H; j++) { b[j] -= upd(q++, gb[j]); v[j] -= upd(q++, gv[j]); }
+      this.c -= upd(q, gc);
+      return loss / n;
+    }</code></pre></figure>
+<div class="exp"><p>파이썬 코드의 <code>model.fit</code>이 내부에서 하는 일을 직접 구현한 부분입니다.</p>
+<ol>
+<li><strong>순전파</strong>: 학습 데이터 한 척마다 은닉 출력 <code>a[j]</code>와 예측값 <code>o</code>를 계산합니다.</li>
+<li><strong>오차</strong>: <code>r = Y[i] - o</code>를 제곱해 더해 평균제곱오차를 구합니다. <code>e = -2r/n</code>은 오차 E를 예측값 ŷ로 미분한 값입니다.</li>
+<li><strong>역전파</strong>: 연쇄법칙으로 기울기를 거꾸로 구합니다.</li>
+<li>∂E/∂vⱼ = e · aⱼ</li>
+<li>∂E/∂zⱼ = e · vⱼ · aⱼ(1 − aⱼ) ← 여기서 aⱼ(1 − aⱼ)가 시그모이드의 미분 σ′(z)</li>
+<li>∂E/∂wⱼₖ = ∂E/∂zⱼ · xₖ</li>
+<li><strong>Adam 업데이트</strong>: <code>m</code>은 기울기의 이동평균(방향), <code>s</code>는 기울기 제곱의 이동평균(크기)입니다. 기울기가 계속 크게 흔들리는 가중치는 조금씩, 꾸준한 가중치는 크게 움직여서 기본 경사하강법(w ← w − η·∂E/∂w)보다 빨리 수렴합니다.</li>
+</ol></div></section>
+<section class="step" id="js-5"><h2>선형회귀 (정규방정식)</h2>
+<figure class="cell"><figcaption><span>ann.js</span><button class="copy" type="button">복사</button></figcaption><pre><code>  // 선형회귀: 정규방정식 (XᵀX)β = XᵀY 을 가우스 소거법으로 풀어 최소제곱 해를 구함
+  function linearRegression(X, Y, idx) {
+    const d = X[idx[0]].length, p = d + 1;
+    const M = Array.from({ length: p }, () =&gt; new Array(p + 1).fill(0));
+    for (const i of idx) {
+      const x = [1, ...X[i]];
+      for (let a = 0; a &lt; p; a++) { for (let c = 0; c &lt; p; c++) M[a][c] += x[a] * x[c]; M[a][p] += x[a] * Y[i]; }
+    }
+    for (let a = 1; a &lt; p; a++) M[a][a] += 1e-9;
+    for (let c = 0; c &lt; p; c++) {
+      let piv = c; for (let r = c + 1; r &lt; p; r++) if (Math.abs(M[r][c]) &gt; Math.abs(M[piv][c])) piv = r;
+      [M[c], M[piv]] = [M[piv], M[c]];
+      for (let r = 0; r &lt; p; r++) { if (r === c || !M[c][c]) continue; const f = M[r][c] / M[c][c]; for (let k = c; k &lt;= p; k++) M[r][k] -= f * M[c][k]; }
+    }
+    return M.map((r, i) =&gt; r[i] ? r[p] / r[i] : 0);   // [상수, a1, a2, ...]
+  }
+  const predictLinear = (beta, x) =&gt; beta[0] + x.reduce((s, v, k) =&gt; s + beta[k + 1] * v, 0);</code></pre></figure>
+<div class="exp"><p>웹페이지에서 비교용으로 쓰는 선형회귀입니다. 최소제곱법의 해는 (XᵀX)β = XᵀY 를 풀면 바로 나오므로, 이 연립방정식을 <strong>가우스 소거법</strong>으로 풉니다. 결과 <code>β</code>는 [상수, L의 계수, B의 계수, D의 계수]이고, <code>predictLinear</code>가 β₀ + β₁L + β₂B + β₃D 를 계산합니다.</p>
+<p>신경망과 달리 반복 학습 없이 한 번에 답이 나오는 이유가 이것입니다 (3장 선형회귀의 a, b 공식과 같은 원리).</p></div></section>
+</div>
+<footer>데이터처리개론 2026년 2학기 과제</footer>
+</div>
+<script>
+(function(){
+  const tabs = [...document.querySelectorAll('.dtab')];
+  function show(k){ tabs.forEach(t => { const on = t.dataset.tab === k; t.setAttribute('aria-selected', on); t.tabIndex = on ? 0 : -1; });
+    document.querySelectorAll('[data-panel]').forEach(p => p.hidden = p.dataset.panel !== k); }
+  tabs.forEach((t,i) => { t.onclick = () => { show(t.dataset.tab); history.replaceState(null, '', '#' + t.dataset.tab); };
+    t.onkeydown = e => { if (e.key === 'ArrowRight' || e.key === 'ArrowLeft'){ const n = tabs[(i + (e.key === 'ArrowRight' ? 1 : tabs.length-1)) % tabs.length]; n.focus(); n.click(); } }; });
+  const h = location.hash.slice(1).split('-')[0]; show(['ship','general','js'].includes(h) ? h : 'ship');
+  if (location.hash.includes('-')) document.getElementById(location.hash.slice(1))?.scrollIntoView();
+  const fb = (txt, done) => { const ta = document.createElement('textarea'); ta.value = txt; document.body.appendChild(ta); ta.select(); try{ document.execCommand('copy'); done(); }catch(e){} ta.remove(); };
+  document.querySelectorAll('.cell .copy').forEach(btn => btn.onclick = () => { const txt = btn.closest('.cell').querySelector('code').textContent;
+    const done = () => { btn.textContent = '복사됨'; setTimeout(() => btn.textContent = '복사', 1400); };
+    if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(txt).then(done, () => fb(txt, done)); else fb(txt, done); });
+})();
+</script>
+</body>
+</html>
